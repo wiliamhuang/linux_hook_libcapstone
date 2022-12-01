@@ -630,7 +630,7 @@ int install_hook(void)
 					break;
 				}
 
-				pSubStr = strstr(insn[idx_inst].op_str, "[rip+");
+				pSubStr = strstr(insn[idx_inst].op_str, "[rip + ");
 				if(pSubStr)	{
 					ReadItem = sscanf(pSubStr+6, "%x]", &RIP_Offset);
 					if(ReadItem == 1)	{
