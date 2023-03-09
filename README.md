@@ -13,7 +13,7 @@ the code to jump to new function and the code to call old function).
 <br>
 
 Get started,<br> 
-`git clone https://github.com/TACC/linux_hook` <br>
+`git clone https://github.com/wiliamhuang/linux_hook_libcapstone` <br>
 `cd linux_hook` <br>
 `make` <br>
 
