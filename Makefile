@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -fPIC -g -O0 -I. -Wunused
+CFLAGS=-Wall -Wextra -fPIC -g -O0 -I./src -I./include -Wunused
 LFLAGS=-fPIC -shared -g -O0 -ldl
 OBJS=obj/mini_open.o obj/hook_open.o  obj/hook.o
 HEADERS=src/hook_int.h

@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "include/hook.h"
+#include <hook.h>
 
 /*
 This code demonstrates how to use "Linux hook" to intercept function open() with 
