@@ -92,7 +92,7 @@ static __attribute__((destructor)) void finalize_myhook()
 
 Save the code as 1.c. <br>
 `gcc -fPIC -c 1.c` <br>
-`gcc -fPIC -shared -o 1.so 1.o obj/hook.o obj/decode.o obj/itab.o obj/syn-att.o obj/syn-intel.o obj/syn.o obj/udis86.o` <br>
+`gcc -fPIC -shared -o 1.so 1.o obj/hook.o -lcapstone` <br>
 
 Now test it. <br>
 `LD_PRELOAD=./1.so touch aaa bbb ccc` <br>
