@@ -622,11 +622,22 @@ install_hook(void)
 
 	query_all_org_func_addr();
 	allocate_memory_block_for_patches();
-
-	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-		printf("ERROR: Failed to initialize engine!\n");
-		exit(1);
-	}
+#if defined(__x86_64__)
+		if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
+			printf("ERROR: Failed to initialize engine!\n");
+			exit(1);
+		}
+#elif defined(__aarch64__)
+		if (cs_open(CS_ARCH_ARM64, CS_MODE_ARM, &handle)) {
+			printf("ERROR: Failed to initialize engine!\n");
+			exit(1);
+		}
+#endif
+    cs_opt_skipdata skipdata = {
+       .mnemonic = "db",
+    };
+    cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
+    cs_option(handle, CS_OPT_SKIPDATA_SETUP, (size_t)&skipdata);
 
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
 		tramp_list =
@@ -668,7 +679,8 @@ install_hook(void)
 				printf("Failed to disassemble code.\n");
 				exit(1);
 			}
-
+		
+#if defined(__x86_64__)
 			for (idx_inst = 0; idx_inst < num_inst; idx_inst++) {
 				OffsetList[idx_inst] = insn[idx_inst].address;
 				if (OffsetList[idx_inst] >= JMP_INSTRCTION_LEN) {
@@ -689,16 +701,62 @@ install_hook(void)
 						tramp_list[nFunc_InBlk].offset_rIP_var = RIP_Offset;
 				}
 			}
+#elif defined(__aarch64__)
+			for (idx_inst = 0; idx_inst < num_inst; idx_inst++) {
+				OffsetList[idx_inst] = insn[idx_inst].address;
+				if (OffsetList[idx_inst] >= JMP_INSTRCTION_LEN) {
+					tramp_list[nFunc_InBlk].saved_code_len =
+					    OffsetList[idx_inst];
+					// TODO: need to add the code to handle relative PC offset
+					break;
+				}
+			}
+#endif
+#if defined(__x86_64__)
+				memcpy(tramp_list[nFunc_InBlk].bounce, instruction_bounce, BOUNCE_CODE_LEN);
+				/* the address of new function */
+				*((unsigned long int *)(tramp_list[nFunc_InBlk].bounce +
+							OFFSET_NEW_FUNC_ADDR)) =
+					(unsigned long int)(module_list[idx_mod].new_func_addr_list[iFunc]);
+#elif defined(__aarch64__)
+			    uint32_t movz_op = 0xd2800000;
+				uint32_t movk_op = 0xf2800000;
+				uint32_t b_op = 0x14000000;
+				uint32_t current_op = 0;
 
-			memcpy(tramp_list[nFunc_InBlk].bounce, instruction_bounce, BOUNCE_CODE_LEN);
-			/* the address of new function */
-			*((unsigned long int *)(tramp_list[nFunc_InBlk].bounce +
-						OFFSET_NEW_FUNC_ADDR)) =
-			    (unsigned long int)(module_list[idx_mod].new_func_addr_list[iFunc]);
+				void *current_ptr = &tramp_list[nFunc_InBlk].bounce;
+				uint64_t target = (uint64_t)module_list[idx_mod].new_func_addr_list[iFunc];
+
+				// movz x16, #<imm>
+				current_op = movz_op | 16;
+				current_op |= (target & 0xffff) << 5;
+				memcpy(current_ptr, &current_op, sizeof(current_op));
+				current_ptr += sizeof(current_op);
+
+				// movk x16, #<imm>, lsl #16
+				current_op = movk_op | 16;
+				current_op |= ((target >> 16) & 0xffff) << 5;
+				current_op |= (1 << 21); // lsl #16
+				memcpy(current_ptr, &current_op, sizeof(current_op));
+				current_ptr += sizeof(current_op);
+
+				// movk x16, #<imm>, lsl #32
+				current_op = movk_op | 16;
+				current_op |= ((target >> 32) & 0xffff) << 5;
+				current_op |= (2 << 21); // lsl #32
+				memcpy(current_ptr, &current_op, sizeof(current_op));
+				current_ptr += sizeof(current_op);
+
+				// Jump to the target address 
+				current_op = 0xD61F0200 | (16 << 5);
+				memcpy(current_ptr, &current_op, sizeof(current_op));
+				current_ptr += sizeof(current_op);
+#endif
 
 			memcpy(tramp_list[nFunc_InBlk].trampoline,
 			       tramp_list[nFunc_InBlk].addr_org_func,
 			       tramp_list[nFunc_InBlk].saved_code_len);
+#if defined(__x86_64__)
 			/* E9 is a jmp instruction */
 			tramp_list[nFunc_InBlk].trampoline[tramp_list[nFunc_InBlk].saved_code_len] =
 			    0xE9;
@@ -707,7 +765,14 @@ install_hook(void)
 					   0xFFFFFFFF);
 			*((int *)(tramp_list[nFunc_InBlk].trampoline +
 				  tramp_list[nFunc_InBlk].saved_code_len + 1)) = Jmp_Offset;
+#elif defined(__aarch64__)
+			current_ptr = &tramp_list[nFunc_InBlk].trampoline[tramp_list[nFunc_InBlk].saved_code_len];
+			uint32_t offset = (uint32_t) ((tramp_list[nFunc_InBlk].addr_org_func + 4 - current_ptr) & 0x0FFFFFFF);
+			current_op = b_op | (offset >> 2);
+			memcpy(current_ptr, &current_op, sizeof(current_op));
+#endif
 
+#if defined(__x86_64__)
 			if (tramp_list[nFunc_InBlk].offset_rIP_var != NULL_RIP_VAR_OFFSET) {
 				jMax = tramp_list[nFunc_InBlk].saved_code_len - 4;
 				for (j = jMax - 2; j <= jMax; j++) {
@@ -736,7 +801,9 @@ install_hook(void)
 				    ((int)(((long int)(tramp_list[nFunc_InBlk].addr_org_func) -
 					    (long int)(tramp_list[nFunc_InBlk].trampoline))));
 			}
-
+#elif defined(__aarch64__)
+			// TODO: need to add the code to handle relative PC offset
+#endif
 			/* set up function pointers for original functions */
 			/* tramp_list[].trampoline holds the entry address */
 			/* to call original function                        */
@@ -755,7 +822,7 @@ install_hook(void)
 				       module_list[idx_mod].func_name_list[iFunc]);
 				exit(1);
 			}
-
+#if defined(__x86_64__)
 			/* save original code for uninstall */
 			memcpy(tramp_list[nFunc_InBlk].org_code,
 			       tramp_list[nFunc_InBlk].addr_org_func, 5);
@@ -765,6 +832,15 @@ install_hook(void)
 			*((int *)(pOpOrgEntry + 1)) =
 			    (int)((long int)(tramp_list[nFunc_InBlk].bounce) -
 				  (long int)(tramp_list[nFunc_InBlk].addr_org_func) - 5);
+#elif defined(__aarch64__)
+			/* save original code for uninstall */
+			memcpy(tramp_list[nFunc_InBlk].org_code,
+			       tramp_list[nFunc_InBlk].addr_org_func, 4);
+			
+			offset = (uint32_t) ((void*)&tramp_list[nFunc_InBlk].bounce - tramp_list[nFunc_InBlk].addr_org_func);
+			current_op = b_op | offset >> 2;
+			memcpy(tramp_list[nFunc_InBlk].addr_org_func, &current_op, sizeof(current_op));
+#endif
 
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
 				printf("Error in executing mprotect(). %s\n",

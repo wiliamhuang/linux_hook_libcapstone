@@ -32,7 +32,11 @@
  * ff 25 00 00 00 00       jmp    QWORD PTR [rip+0x0]     6 bytes
  * 8 bytes for the address of new function.
  */
-#define BOUNCE_CODE_LEN        (14)
+#if defined(__x86_64__)
+	#define BOUNCE_CODE_LEN        (14)
+#elif defined(__aarch64__)
+	#define BOUNCE_CODE_LEN        (16)
+#endif
 
 /**
  * The relative offset of new function address in bouncing code. It is after
@@ -44,10 +48,18 @@
 #define MAX_LEN_TO_DISASSEMBLE (24)
 
 /* The max length of an instruction */
-#define MAX_INSN_LEN           (15)
+#if defined(__x86_64__)
+	#define MAX_INSN_LEN        (15)
+#elif defined(__aarch64__)
+	#define MAX_INSN_LEN        (4)
+#endif
 
 /* The length of jmp instruction we use. */
-#define JMP_INSTRCTION_LEN     (5)
+#if defined(__x86_64__)
+	#define JMP_INSTRCTION_LEN        (5)
+#elif defined(__aarch64__)
+	#define JMP_INSTRCTION_LEN        (4)
+#endif
 
 /**
  * The max length of bytes to hold the instruments to call original function.
