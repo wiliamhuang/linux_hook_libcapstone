@@ -623,21 +623,23 @@ install_hook(void)
 	query_all_org_func_addr();
 	allocate_memory_block_for_patches();
 #if defined(__x86_64__)
-		if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-			printf("ERROR: Failed to initialize engine!\n");
-			exit(1);
-		}
+	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
+		printf("ERROR: Failed to initialize engine!\n");
+		exit(1);
+	}
 #elif defined(__aarch64__)
-		if (cs_open(CS_ARCH_ARM64, CS_MODE_ARM, &handle)) {
-			printf("ERROR: Failed to initialize engine!\n");
-			exit(1);
-		}
+	if (cs_open(CS_ARCH_ARM64, CS_MODE_ARM, &handle)) {
+		printf("ERROR: Failed to initialize engine!\n");
+		exit(1);
+	}
+#else
+#error Unsupported architecture. Only x86_64 and aarch64 are supported.
 #endif
-    cs_opt_skipdata skipdata = {
-       .mnemonic = "db",
-    };
-    cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
-    cs_option(handle, CS_OPT_SKIPDATA_SETUP, (size_t)&skipdata);
+	cs_opt_skipdata skipdata = {
+		.mnemonic = "db",
+	};
+	cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
+	cs_option(handle, CS_OPT_SKIPDATA_SETUP, (size_t)&skipdata);
 
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
 		tramp_list =
@@ -713,44 +715,44 @@ install_hook(void)
 			}
 #endif
 #if defined(__x86_64__)
-				memcpy(tramp_list[nFunc_InBlk].bounce, instruction_bounce, BOUNCE_CODE_LEN);
-				/* the address of new function */
-				*((unsigned long int *)(tramp_list[nFunc_InBlk].bounce +
-							OFFSET_NEW_FUNC_ADDR)) =
-					(unsigned long int)(module_list[idx_mod].new_func_addr_list[iFunc]);
+			memcpy(tramp_list[nFunc_InBlk].bounce, instruction_bounce, BOUNCE_CODE_LEN);
+			/* the address of new function */
+			*((unsigned long int *)(tramp_list[nFunc_InBlk].bounce +
+						OFFSET_NEW_FUNC_ADDR)) =
+				(unsigned long int)(module_list[idx_mod].new_func_addr_list[iFunc]);
 #elif defined(__aarch64__)
-			    uint32_t movz_op = 0xd2800000;
-				uint32_t movk_op = 0xf2800000;
-				uint32_t b_op = 0x14000000;
-				uint32_t current_op = 0;
+			uint32_t movz_op = 0xd2800000;
+			uint32_t movk_op = 0xf2800000;
+			uint32_t b_op = 0x14000000;
+			uint32_t current_op = 0;
 
-				void *current_ptr = &tramp_list[nFunc_InBlk].bounce;
-				uint64_t target = (uint64_t)module_list[idx_mod].new_func_addr_list[iFunc];
+			void *current_ptr = &tramp_list[nFunc_InBlk].bounce;
+			uint64_t target = (uint64_t)module_list[idx_mod].new_func_addr_list[iFunc];
 
-				// movz x16, #<imm>
-				current_op = movz_op | 16;
-				current_op |= (target & 0xffff) << 5;
-				memcpy(current_ptr, &current_op, sizeof(current_op));
-				current_ptr += sizeof(current_op);
+			// movz x16, #<imm>
+			current_op = movz_op | 16;
+			current_op |= (target & 0xffff) << 5;
+			memcpy(current_ptr, &current_op, sizeof(current_op));
+			current_ptr += sizeof(current_op);
 
-				// movk x16, #<imm>, lsl #16
-				current_op = movk_op | 16;
-				current_op |= ((target >> 16) & 0xffff) << 5;
-				current_op |= (1 << 21); // lsl #16
-				memcpy(current_ptr, &current_op, sizeof(current_op));
-				current_ptr += sizeof(current_op);
+			// movk x16, #<imm>, lsl #16
+			current_op = movk_op | 16;
+			current_op |= ((target >> 16) & 0xffff) << 5;
+			current_op |= (1 << 21); // lsl #16
+			memcpy(current_ptr, &current_op, sizeof(current_op));
+			current_ptr += sizeof(current_op);
 
-				// movk x16, #<imm>, lsl #32
-				current_op = movk_op | 16;
-				current_op |= ((target >> 32) & 0xffff) << 5;
-				current_op |= (2 << 21); // lsl #32
-				memcpy(current_ptr, &current_op, sizeof(current_op));
-				current_ptr += sizeof(current_op);
+			// movk x16, #<imm>, lsl #32
+			current_op = movk_op | 16;
+			current_op |= ((target >> 32) & 0xffff) << 5;
+			current_op |= (2 << 21); // lsl #32
+			memcpy(current_ptr, &current_op, sizeof(current_op));
+			current_ptr += sizeof(current_op);
 
-				// Jump to the target address 
-				current_op = 0xD61F0200 | (16 << 5);
-				memcpy(current_ptr, &current_op, sizeof(current_op));
-				current_ptr += sizeof(current_op);
+			// Jump to the target address 
+			current_op = 0xD61F0200 | (16 << 5);
+			memcpy(current_ptr, &current_op, sizeof(current_op));
+			current_ptr += sizeof(current_op);
 #endif
 
 			memcpy(tramp_list[nFunc_InBlk].trampoline,
