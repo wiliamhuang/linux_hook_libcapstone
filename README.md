@@ -3,7 +3,7 @@ linux_hook is a mini framework to hook / intercept the functions in shared libra
 under Linux. It only works on x86_64 and ARM64(AArch64) at this time. We might extend
 it to support PowerPC in future. <br>
 
-[udis86](https://github.com/vmt/udis86) was adopted to disasseble binary code on x86_64. <br>
+libcapstone was adopted to disasseble binary code. <br>
 
 Trampoline technique is adopted in the implementation of linux_hook, so the smallest 
 size functions we can hook needs 5 bytes. A jmp (+/-2GB) instruction with 5 bytes will 
