@@ -93,16 +93,33 @@ static char    *path_libpthread;
 #define MAP_SIZE_SMALL (32768)
 
 /*
+ * get_string_pos - Determine the start and end positions of a string.
+ */
+static void
+get_string_pos(char *buf, char **start, char **end)
+{
+	*start = buf;
+	while (**start != ' ') {
+		(*start)--;
+	}
+	(*start)++;
+
+	*end = buf;
+	while (**end != ' ' && **end != '\n') {
+		(*end)++;
+	}
+}
+
+/*
  * determine_lib_path - Determine the full paths of three libraries, ld.so, libc.so
  * and libpthread.so.
  */
 static void
 determine_lib_path(void)
 {
-	int   i, size_read, rc;
+	int   i, size_read;
 	char *read_buff_map = NULL;
-	char *pPos = NULL, *pStart = NULL, *pEnd = NULL;
-	char  lib_ver_str[32], lib_dir_str[256];
+	char *pos, *start, *end;
 	FILE *fp;
 
 	read_buff_map = malloc(MAP_SIZE_SMALL);
@@ -123,52 +140,63 @@ determine_lib_path(void)
 		exit(1);
 	}
 
-	pPos = strstr(read_buff_map, "/ld-2.");
-	if (pPos == NULL) {
-		free(read_buff_map);
-		found_libc = 0;
+	pos = strstr(read_buff_map, "/lib64/ld-linux");
+	if (pos == NULL)
+		/* try a different format */
+		pos = strstr(read_buff_map, "/lib64/ld-2");
+	if (pos == NULL) {
 		printf("Warning: Failed to find ld.so.\n");
-		return;
+		goto err;
 	}
-	for (i = 0; i < 16; i++) {
-		if (strncmp(pPos + i, ".so", 3) == 0) {
-			pEnd = pPos + i + 3;
-			break;
-		}
+	get_string_pos(pos, &start, &end);
+	if ((end - start + 1) > sizeof(path_ld)) {
+		printf("Warning: path of ld.so is too long.\n");
+		goto err;
 	}
-	if (pEnd == NULL) {
-		printf("Fail to determine the ending position of libc path.\nQuit\n");
-		exit(1);
+	memcpy(path_ld, start, end - start);
+	path_ld[end - start] = 0;
+
+	pos = strstr(read_buff_map, "/lib64/libc.so");
+	if (pos == NULL)
+		/* try a different format */
+		pos = strstr(read_buff_map, "/lib64/libc-2");
+	if (pos == NULL) {
+		printf("Warning: Failed to find libc.so.\n");
+		goto err;
 	}
-	for (i = 0; i < 100; i++) {
-		if (strncmp(pPos - i, "  /", 3) == 0) {
-			pStart = pPos - i + 2;
-			break;
-		}
+	get_string_pos(pos, &start, &end);
+	path_libc = malloc(end - start + 1);
+	if (path_libc == NULL) {
+		printf("Warning: Failed to allocate memory for path_libc.\n");
+		goto err;
 	}
-	if (pEnd == NULL) {
-		printf("Fail to determine the starting position of libc path.\nQuit\n");
-		exit(1);
+	memcpy(path_libc, start, end - start);
+	path_libc[end - start] = 0;
+
+	/* compose path_libpthread based on path_libc string */
+	path_libpthread = malloc(end - start + 1 + 6);
+	if (path_libpthread == NULL) {
+		printf("Warning: Failed to allocate memory for path_libc.\n");
+		goto err;
 	}
 
-	memcpy(path_ld, pStart, pEnd - pStart);
-	path_ld[pEnd - pStart] = 0;
-	memcpy(lib_ver_str, pPos + 4, pEnd - 3 - (pPos + 4));
-	lib_ver_str[pEnd - 3 - (pPos + 4)] = 0;
-	memcpy(lib_dir_str, pStart, pPos - pStart);
-	lib_dir_str[pPos - pStart] = 0;
+	memcpy(path_libpthread, start, end - start);
+	path_libpthread[end - start + 1 + 5] = 0;
+	pos = strstr(path_libpthread, "libc");
+	memcpy(pos + 3    , "pthread", 7);
+	memcpy(pos + 3 + 7, path_libc + (pos - path_libpthread + 4), end - start + 1 + 6 - (pos - path_libpthread + 4));
+	if (path_libpthread[end - start + 1 + 4] >= '5' && path_libpthread[end - start + 1 + 4] <= '7') {
+		path_libpthread[end - start + 1 + 4] = '0';
+	}
 
 	free(read_buff_map);
-	rc = asprintf(&path_libc, "%s/libc-%s.so", lib_dir_str, lib_ver_str);
-	if (rc < 0) {
-		printf("Failed to allocate memory for path_libc.\n");
-		exit(1);
-	}
-	rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
-	if (rc < 0) {
-		printf("Failed to allocate memory for path_libpthread.\n");
-		exit(1);
-	}
+	found_libc = 1;
+	return;
+
+err:
+	free(read_buff_map);
+	found_libc = 0;
+	return;
 }
 
 /*
