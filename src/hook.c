@@ -142,6 +142,8 @@ determine_lib_path(void)
 
 	pos = strstr(read_buff_map, "/lib64/ld-linux");
 	if (pos == NULL)
+		pos = strstr(read_buff_map, "/lib/ld-linux");
+	if (pos == NULL)
 		/* try a different format */
 		pos = strstr(read_buff_map, "/lib64/ld-2");
 	if (pos == NULL) {
@@ -736,7 +738,7 @@ install_hook(void)
 				OffsetList[idx_inst] = insn[idx_inst].address;
 				if (OffsetList[idx_inst] >= JMP_INSTRCTION_LEN) {
 					tramp_list[nFunc_InBlk].saved_code_len =
-					    OffsetList[idx_inst];
+					    JMP_INSTRCTION_LEN;
 					// TODO: need to add the code to handle relative PC offset
 					break;
 				}
